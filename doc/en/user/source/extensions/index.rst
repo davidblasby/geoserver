@@ -14,6 +14,7 @@ This section describes most of the extensions available for GeoServer. Other dat
    controlflow/index
    dxf/index   
    excel
+   geopkg-output/index
    grib/grib
    imagemap
    importer/index
