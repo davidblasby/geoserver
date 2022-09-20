@@ -11,7 +11,7 @@ The general GeoServer upgrade process is as follows:
 
 #. Make sure that the current data directory is external to the application (not located inside the application file structure).
 
-   Check the GeoServer Server status page for the double check the data directory location.
+   Check the GeoServer Server status page to double check the data directory location.
 
 #. Make a note of any extensions you have installed.
 
@@ -65,4 +65,4 @@ Any REST clients which rely on this binding information should be updated to sup
 GeoJSON encoding (GeoServer 2.6 and newer)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-As of GeoServer 2.6, the GeoJSON produced by the WFS service no longer uses a non-standard encoding for the CRS. To reenable this behavior for compatibility purposes, set ``GEOSERVER_GEOJSON_LEGACY_CRS=true`` as a system property, context parameter, or environment variable.
+As of GeoServer 2.6, the GeoJSON produced by the WFS service no longer uses a non-standard encoding for the CRS. To re-enable this behavior for compatibility purposes, set ``GEOSERVER_GEOJSON_LEGACY_CRS=true`` as a system property, context parameter, or environment variable.

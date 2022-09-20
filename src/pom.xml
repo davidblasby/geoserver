@@ -101,7 +101,7 @@
     <wicket.version>7.18.0</wicket.version>
     <ant.version>1.10.11</ant.version>
     <httpclient.version>4.5.13</httpclient.version>
-    <imageio-ext.version>1.4.6</imageio-ext.version>
+    <imageio-ext.version>1.4.7</imageio-ext.version>
     <jaiext.version>1.1.23</jaiext.version>
     <java.awt.headless>true</java.awt.headless>
     <sun.java2d.d3d>true</sun.java2d.d3d>
@@ -121,7 +121,7 @@
     <image.tests>true</image.tests>
     <interactive.image>false</interactive.image>
     <windows.leniency>true</windows.leniency>
-    <gf.version>3.5.0</gf.version>
+    <gf.version>3.5.1</gf.version>
     <jasypt.version>1.9.2</jasypt.version>
     <hibernate-version>3.6.9.Final</hibernate-version>
     <hibernate-generic-dao-version>1.1.0</hibernate-generic-dao-version>
@@ -138,7 +138,7 @@
     <jackson2.databind.version>2.13.2.1</jackson2.databind.version>
     <compress-lzf.version>1.0.3</compress-lzf.version>
     <marlin.version>0.9.3</marlin.version>
-    <postgresql.jdbc.version>42.3.3</postgresql.jdbc.version>
+    <postgresql.jdbc.version>42.4.1</postgresql.jdbc.version>
     <postgis.jdbc.version>1.3.3</postgis.jdbc.version>
     <oracle.jdbc.version>19.10.0.0</oracle.jdbc.version>
     <mysql.jdbc.version>8.0.28</mysql.jdbc.version>
@@ -549,6 +549,11 @@
         <version>${gt.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.geotools</groupId>
+        <artifactId>gt-stac-store</artifactId>
+        <version>${gt.version}</version>
+      </dependency>
+      <dependency>
         <groupId>org.jdom</groupId>
         <artifactId>jdom2</artifactId>
         <version>2.0.6.1</version>
@@ -843,6 +848,11 @@
         <version>4.2</version>
       </dependency>
       <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-text</artifactId>
+        <version>1.9</version>
+      </dependency>
+      <dependency>
         <groupId>commons-dbcp</groupId>
         <artifactId>commons-dbcp</artifactId>
         <version>1.4</version>
@@ -856,11 +866,6 @@
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-exec</artifactId>
         <version>1.3</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.commons</groupId>
-        <artifactId>commons-text</artifactId>
-        <version>1.4</version>
       </dependency>
       <dependency>
         <groupId>com.jayway.jsonpath</groupId>
@@ -977,7 +982,7 @@
       <dependency>
         <groupId>org.springframework</groupId>
         <artifactId>spring-oxm</artifactId>
-        <version>3.0.5.RELEASE</version>
+        <version>${spring.version}</version>
       </dependency>
       <dependency>
         <groupId>org.springframework.security</groupId>
@@ -1361,7 +1366,7 @@
       <dependency>
         <groupId>org.jsoup</groupId>
         <artifactId>jsoup</artifactId>
-        <version>1.14.2</version>
+        <version>1.15.3</version>
       </dependency>
       <dependency>
         <groupId>com.github.svenmeier.wicket-dnd</groupId>
@@ -1383,7 +1388,7 @@
       <dependency>
         <groupId>com.github.oshi</groupId>
         <artifactId>oshi-core</artifactId>
-        <version>6.2.1</version>
+        <version>6.2.2</version>
       </dependency>
       <dependency>
         <groupId>org.postgresql</groupId>
@@ -1631,9 +1636,21 @@
     <pluginManagement>
       <plugins>
         <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-war-plugin</artifactId>
           <version>3.3.2</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>3.3.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.3.0</version>
+        </plugin>
+        <plugin>
+          <groupId>com.ruleoftech</groupId>
+          <artifactId>markdown-page-generator-plugin</artifactId>
+          <version>2.4.0</version>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -1703,6 +1720,7 @@
             <descriptor>release/war.xml</descriptor>
             <descriptor>release/javadoc.xml</descriptor>
             <descriptor>release/bin.xml</descriptor>
+            <descriptor>release/data.xml</descriptor>
             <descriptor>release/ext-db2.xml</descriptor>
             <descriptor>release/ext-feature-pregeneralized.xml</descriptor>
             <descriptor>release/ext-jp2k.xml</descriptor>
