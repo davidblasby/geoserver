@@ -41,11 +41,36 @@ public class RangeSubsetKvpParser extends KvpParser {
 
     @Override
     public Object parse(String value) throws Exception {
-        RangeSubsetParser parser = new RangeSubsetParser(new StringReader(value));
-        SimpleNode root = parser.RangeSubset();
-        RangeSubsetType result =
-                (RangeSubsetType) root.jjtAccept(new RangeSubsetKvpParserVisitor(), null);
-
+        RangeSubsetType result = null;
+        try {
+            RangeSubsetParser parser = new RangeSubsetParser(new StringReader(value));
+            SimpleNode root = parser.RangeSubset();
+            result = (RangeSubsetType) root.jjtAccept(new RangeSubsetKvpParserVisitor(), null);
+        } catch (Exception e) {
+            // empty - throw exception for the whole thing
+            if ((value == null) || (value.trim().isEmpty())) {
+                throw new WcsException(
+                        "Unable to parse RangeSubset parameter",
+                        InvalidParameterValue,
+                        "RangeSubset");
+            }
+            value = value.trim();
+            for (String item : value.split(";")) {
+                // i.e. "contents:linear" or "temperature:nearest[forecastTimes[T1]]"
+                item = item.trim();
+                if (item.endsWith(":")) {
+                    // ie. "contents:"  WCS Spec doesn't specify the exact error message/locator
+                    //  This satisfies the WCS 1.1 CITE Tests
+                    throw new WcsException(
+                            "RangeSubset parameter - no FieldSubset / InterpolationMethod",
+                            InvalidParameterValue,
+                            "FieldSubset / InterpolationMethod");
+                }
+            }
+            // couldnt figure out what when wrong
+            throw new WcsException(
+                    "Unable to parse RangeSubset parameter", InvalidParameterValue, "RangeSubset");
+        }
         for (Object o : result.getFieldSubset()) {
             FieldSubsetType type = (FieldSubsetType) o;
             String interpolationType = type.getInterpolationType();

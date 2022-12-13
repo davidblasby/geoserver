@@ -5,9 +5,11 @@
  */
 package org.geoserver.wcs.kvp;
 
+import static org.geoserver.platform.ServiceException.INVALID_PARAMETER_VALUE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.vfny.geoserver.wcs.WcsException.WcsExceptionCode.InvalidParameterValue;
 
@@ -88,5 +90,21 @@ public class RangeSubsetKvpParserTest {
         assertEquals("Red", keys.get(0));
         assertEquals("Green", keys.get(1));
         assertEquals("Blue", keys.get(2));
+    }
+
+    /**
+     * This has a missing FieldSubset/InterpolationMethod. CITE 1.1.1 tests verify that this throws
+     * an exception and Location is "FieldSubset / InterpolationMethod"
+     */
+    @Test
+    public void testMissingFieldSubset() throws Exception {
+        try {
+            parser.parse("radiance:");
+            fail("RangeSubsetParser - shouldn't be able to parse this");
+        } catch (WcsException e) {
+            assertEquals(INVALID_PARAMETER_VALUE, e.getCode());
+            assertTrue(e.getLocator().contains("FieldSubset"));
+            assertTrue(e.getLocator().contains("InterpolationMethod"));
+        }
     }
 }
