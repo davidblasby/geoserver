@@ -5,6 +5,7 @@
  */
 package org.geoserver.ows;
 
+import static javax.xml.stream.XMLStreamConstants.END_ELEMENT;
 import static javax.xml.stream.XMLStreamConstants.START_ELEMENT;
 
 import java.io.BufferedInputStream;
@@ -21,6 +22,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -33,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.xml.namespace.QName;
@@ -45,6 +48,8 @@ import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import net.opengis.ows10.AcceptVersionsType;
+import net.opengis.ows10.Ows10Factory;
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
@@ -255,6 +260,8 @@ public class Dispatcher extends AbstractController {
             }
 
             // dispatch the operation
+            updateAcceptVersions(request, service);
+
             Operation operation = dispatch(request, service);
             request.setOperation(operation);
 
@@ -282,6 +289,40 @@ public class Dispatcher extends AbstractController {
         }
 
         return null;
+    }
+
+    private void updateAcceptVersions(Request request, Service service) {
+        if (request.getRequest().equalsIgnoreCase("GetCapabilities")) {
+            // ensure that down-stream processes know the negotiated version
+            if (request.getRawKvp() == null) {
+                request.setRawKvp(new HashMap<>());
+            }
+            request.getRawKvp().put("version", service.getVersion().toString());
+            request.getKvp().put("version", service.getVersion().toString());
+        }
+
+        if (service.getId().equalsIgnoreCase("WFS")
+                && (request.getVersion() != null)
+                && ((request.getVersion().equals("1.1.0"))
+                        || (request.getVersion().equals("1.0.0")))
+                && (request.getRequest().equalsIgnoreCase("GetCapabilities"))
+                && (request.getKvp().containsKey("ACCEPTVERSIONS"))
+                && (request.getKvp().get("ACCEPTVERSIONS") != null)) {
+            // need to do a type conversion
+            net.opengis.ows11.AcceptVersionsType current =
+                    (net.opengis.ows11.AcceptVersionsType) request.getKvp().get("ACCEPTVERSIONS");
+
+            AcceptVersionsType newValue = Ows10Factory.eINSTANCE.createAcceptVersionsType();
+            @SuppressWarnings("unchecked")
+            List<String> values =
+                    (List<String>)
+                            current.getVersion().stream()
+                                    .map(x -> x.toString())
+                                    .collect(Collectors.toList());
+            values.stream().forEach(x -> newValue.getVersion().add(x));
+
+            request.getKvp().put("ACCEPTVERSIONS", newValue);
+        }
     }
 
     void flagAsSOAP(Operation op) {
@@ -500,6 +541,27 @@ public class Dispatcher extends AbstractController {
         return RequestUtils.getBufferedXMLReader(fileItem.getInputStream(), XML_LOOKAHEAD);
     }
 
+    /** parses the AcceptVersions from the request KVP and puts it in the request */
+    void handleAcceptVersionsKVP(Request req) {
+        if ((req.getVersion() != null) || (req.getRequest() == null)) {
+            return;
+        }
+        if (!req.getRequest().equalsIgnoreCase("GetCapabilities")) {
+            return;
+        }
+        String acceptVersions = (String) req.getRawKvp().get("AcceptVersions");
+        if (acceptVersions == null) {
+            return;
+        }
+
+        List<Version> acceptVersionsList =
+                Arrays.asList(acceptVersions.split(",")).stream()
+                        .map(x -> new Version(normalizeVersion(x)))
+                        .collect(Collectors.toList());
+
+        req.setAcceptVersions(acceptVersionsList);
+    }
+
     Service service(Request req) throws Exception {
         // check kvp
         if (req.getKvp() != null) {
@@ -509,6 +571,7 @@ public class Dispatcher extends AbstractController {
                     normalizeVersion(normalize(KvpUtils.getSingleValue(req.getKvp(), "version"))));
             req.setRequest(normalize(KvpUtils.getSingleValue(req.getKvp(), "request")));
             req.setOutputFormat(normalize(KvpUtils.getSingleValue(req.getKvp(), "outputFormat")));
+            handleAcceptVersionsKVP(req);
         }
         // check the body
         if (req.getInput() != null && "POST".equalsIgnoreCase(req.getHttpRequest().getMethod())) {
@@ -543,14 +606,20 @@ public class Dispatcher extends AbstractController {
                     "Could not determine service", "MissingParameterValue", "service");
         }
 
-        // load from teh context
-        Service serviceDescriptor = findService(service, req.getVersion(), req.getNamespace());
+        // load from the context
+
+        Service serviceDescriptor =
+                findService(service, req.getVersion(), req.getNamespace(), req.getAcceptVersions());
         if (serviceDescriptor == null) {
             // hack for backwards compatability, try finding the service with the context instead
             // of the service
             if (req.getContext() != null) {
                 serviceDescriptor =
-                        findService(req.getContext(), req.getVersion(), req.getNamespace());
+                        findService(
+                                req.getContext(),
+                                req.getVersion(),
+                                req.getNamespace(),
+                                req.getAcceptVersions());
                 if (serviceDescriptor != null) {
                     // found, assume that the client is using <service>/<request>
                     if (req.getRequest() == null) {
@@ -566,7 +635,11 @@ public class Dispatcher extends AbstractController {
             }
         }
         req.setServiceDescriptor(serviceDescriptor);
-        return fireServiceDispatchedCallback(req, serviceDescriptor);
+        Service result = fireServiceDispatchedCallback(req, serviceDescriptor);
+        if (req.getVersion() == null) {
+            req.setVersion(serviceDescriptor.getVersion().toString());
+        }
+        return result;
     }
 
     Service fireServiceDispatchedCallback(Request req, Service service) {
@@ -1133,7 +1206,8 @@ public class Dispatcher extends AbstractController {
         return services;
     }
 
-    Service findService(String id, String ver, String namespace) throws ServiceException {
+    Service findService(String id, String ver, String namespace, List<Version> acceptsVersions)
+            throws ServiceException {
         Version version = (ver != null) ? new Version(ver) : null;
         Collection<Service> services = loadServices();
 
@@ -1158,6 +1232,40 @@ public class Dispatcher extends AbstractController {
         }
 
         Service sBean = null;
+
+        if ((version == null) && (acceptsVersions != null)) {
+            if (namespace != null) {
+                // need to match based on the XML request namespace.
+                List<Service> filteredMatches =
+                        matches.stream()
+                                .filter(
+                                        x ->
+                                                (x.getNamespace() != null)
+                                                        && x.getNamespace().equals(namespace))
+                                .collect(Collectors.toList());
+                if (!filteredMatches.isEmpty()) {
+                    matches = filteredMatches;
+                }
+            } else {
+                for (Version acceptVersion : acceptsVersions) {
+                    boolean match =
+                            matches.stream().anyMatch(x -> x.getVersion().equals(acceptVersion));
+                    if (match) {
+                        version = acceptVersion;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if ((version != null) && (acceptsVersions == null)) {
+            List<String> provided =
+                    matches.stream()
+                            .map(x -> x.getVersion().toString())
+                            .collect(Collectors.toList());
+            String v = RequestUtils.getVersionPreOws(provided, List.of(version.toString()));
+            version = new Version(v);
+        }
 
         // if multiple, use version to filter match
         if (matches.size() > 1) {
@@ -1612,10 +1720,11 @@ public class Dispatcher extends AbstractController {
             service = parser.getAttributeValue(null, "service");
             version = parser.getAttributeValue(null, "version");
             outputFormat = parser.getAttributeValue(null, "outputFormat");
+
         } finally {
             parser.close();
         }
-
+        req.setAcceptVersions(parseAcceptVersionsXML(req, request));
         req.setNamespace(normalize(namespace));
         req.setPostRequestElementName(normalize(elementName));
         // These may already be given by the request query string KVP's, override only if non-null
@@ -1633,6 +1742,61 @@ public class Dispatcher extends AbstractController {
         }
 
         return req;
+    }
+
+    /**
+     * given a GetCapabilities request, we parse out the AcceptVersions. We read as little of the
+     * XML as possible because we don't want to disturb reader. example; <GetCapabilities ... >
+     * <ows:AcceptVersions> <ows:Version>1.0.0</ows:Version> <ows:Version>1.1.1</ows:Version>
+     * </ows:AcceptVersions> ... </GetCapabilities>
+     *
+     * @param request incomming request from user
+     * @param ogcRequest i.e. "GetCapabilities"
+     * @return
+     * @throws XMLStreamException
+     */
+    List<Version> parseAcceptVersionsXML(Request request, String ogcRequest)
+            throws XMLStreamException, IOException {
+        List<Version> result = null;
+        XMLStreamReader parser = createParserForRootElement(request);
+        try {
+
+            if ((ogcRequest == null) || !(ogcRequest.equalsIgnoreCase("GetCapabilities"))) {
+                return null;
+            }
+
+            // might have acceptVersions
+            while (parser.hasNext()) {
+                int nodeType = parser.next();
+                if (nodeType == START_ELEMENT) {
+                    String tag = parser.getLocalName();
+                    // if there isn't an AcceptVersions tag, then we probably have things like
+                    // `Section` or
+                    // `AcceptFormats`
+                    if (!tag.equals("Version")
+                            && !tag.equals("AcceptVersions")
+                            && !tag.equals("GetCapabilities")) {
+                        return result;
+                    }
+
+                    if (tag.equals("Version")) {
+                        // version tag - extract its text
+                        if (result == null) {
+                            result = new ArrayList<>();
+                        }
+                        result.add(new Version(normalizeVersion(parser.getElementText())));
+                    }
+                } else if (nodeType == END_ELEMENT) {
+                    if (!parser.getLocalName().equals("Version")) {
+                        return result; // done!
+                    }
+                }
+            }
+        } finally {
+            parser.close();
+        }
+
+        return result.isEmpty() ? null : result;
     }
 
     private XMLStreamReader createParserForRootElement(Request req)
